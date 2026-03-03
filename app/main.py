@@ -30,3 +30,20 @@ forecast = forecaster.forecast_next_24_hours()
 
 print("Next 24 Hour Forecast:")
 print(forecast)
+
+from agents.recommender import RecommenderAgent
+
+print("\n===== RECOMMENDATIONS =====")
+
+recommender = RecommenderAgent(summary, forecast)
+recommendations = recommender.generate_recommendations()
+
+for r in recommendations:
+    print("-", r)
+from agents.reporter import ReporterAgent
+
+print("\nGenerating PDF Report...")
+
+reporter = ReporterAgent(summary, forecast, recommendations)
+file_path = reporter.generate_pdf_report()
+print(f"PDF Report Generated Successfully! Saved at: {file_path}")
