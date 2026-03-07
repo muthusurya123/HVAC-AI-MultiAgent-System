@@ -47,3 +47,10 @@ print("\nGenerating PDF Report...")
 reporter = ReporterAgent(summary, forecast, recommendations)
 file_path = reporter.generate_pdf_report()
 print(f"PDF Report Generated Successfully! Saved at: {file_path}")
+from agents.weather import WeatherAgent
+
+weather = WeatherAgent("YOUR_API_KEY")
+
+temps, humidity = weather.get_weather_forecast()
+
+print("Weather Forecast Temps:", temps[:5])

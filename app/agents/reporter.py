@@ -9,6 +9,7 @@ from reportlab.platypus import (
     Table,
     TableStyle
 )
+
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from reportlab.lib.units import inch
