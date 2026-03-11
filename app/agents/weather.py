@@ -2,39 +2,39 @@ import requests
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env
-load_dotenv()
-
 
 class WeatherAgent:
 
     def __init__(self):
+
+        # Load environment variables
+        load_dotenv()
+
         self.api_key = os.getenv("WEATHER_API_KEY")
         self.city = os.getenv("CITY")
 
-        print("Loaded API KEY:", self.api_key)
-        print("Loaded CITY:", self.city)
+        self.url = f"https://api.openweathermap.org/data/2.5/forecast?q={self.city}&appid={self.api_key}&units=metric"
+
 
     def get_weather_forecast(self):
 
-        url = f"https://api.openweathermap.org/data/2.5/forecast?q={self.city}&appid={self.api_key}&units=metric"
+        response = requests.get(self.url)
 
-        response = requests.get(url)
+        if response.status_code != 200:
+            raise Exception("Weather API request failed")
 
         data = response.json()
 
-        print("API RESPONSE:", data)
-
-        # If API failed
+        # Safety check
         if "list" not in data:
-            raise Exception("Weather API failed. Check API key or city name.")
+            raise Exception("Invalid weather API response")
 
         temps = []
         humidity = []
 
-        # OpenWeather returns data every 3 hours
-        # 8 entries = 24 hours
+        # Get next 24 hours (3-hour interval × 8)
         for item in data["list"][:8]:
+
             temps.append(item["main"]["temp"])
             humidity.append(item["main"]["humidity"])
 

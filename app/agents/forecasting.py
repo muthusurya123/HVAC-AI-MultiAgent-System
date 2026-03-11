@@ -1,105 +1,187 @@
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
+import numpy as np
+from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 
 
 class ForecasterAgent:
 
-    def __init__(self, data_path):
-        self.data_path = data_path
-        self.model = RandomForestRegressor(n_estimators=50, random_state=42)
-        self.hourly_df = None
+    def __init__(self, dataset_path):
 
-    # -----------------------------------
-    # Load and prepare data
-    # -----------------------------------
+        self.dataset_path = dataset_path
+        self.df = None
+        self.model = None
+
+    # -------------------------
+    # Load and Feature Engineering
+    # -------------------------
+
     def load_and_prepare_data(self):
-        df = pd.read_csv(self.data_path, parse_dates=["Timestamp"])
-        df.set_index("Timestamp", inplace=True)
-        df = df.select_dtypes(include=["number"])
 
-        # Convert to hourly
-        hourly_df = df.resample("h").mean()
+        self.df = pd.read_csv(
+            self.dataset_path,
+            parse_dates=["Timestamp"]
+        )
 
-        # Create lag feature
-                # Create lag features
-        hourly_df["kW_lag1"] = hourly_df["kW"].shift(1)
-        hourly_df["kW_lag2"] = hourly_df["kW"].shift(2)
-        hourly_df["kW_lag3"] = hourly_df["kW"].shift(3)
-        hourly_df["kW_lag24"] = hourly_df["kW"].shift(24)
+        # Time features
+        self.df["Hour"] = self.df["Timestamp"].dt.hour
+        self.df["DayOfWeek"] = self.df["Timestamp"].dt.dayofweek
+        self.df["Month"] = self.df["Timestamp"].dt.month
 
-        hourly_df = hourly_df.dropna()
+        # Lag features (important for time series)
+        self.df["lag_1"] = self.df["kW"].shift(1)
+        self.df["lag_2"] = self.df["kW"].shift(2)
+        self.df["lag_3"] = self.df["kW"].shift(3)
 
-        hourly_df = hourly_df.dropna()
+        # Rolling average
+        self.df["rolling_mean_3"] = self.df["kW"].rolling(window=3).mean()
+        self.df["rolling_mean_6"] = self.df["kW"].rolling(window=6).mean()
 
-        self.hourly_df = hourly_df
+        # HVAC interaction features
+        self.df["Temp_Occupancy"] = self.df["AmbientTemp"] * self.df["Occupancy"]
+        self.df["Temp_Humidity"] = self.df["AmbientTemp"] * self.df["Humidity"]
 
-    # -----------------------------------
-    # Train model
-    # -----------------------------------
+        self.df = self.df.dropna()
+
+        # Feature list
+        self.features = [
+
+            "Hour",
+            "DayOfWeek",
+            "Month",
+
+            "AmbientTemp",
+            "Humidity",
+            "Occupancy",
+            "TR",
+
+            "lag_1",
+            "lag_2",
+            "lag_3",
+
+            "rolling_mean_3",
+            "rolling_mean_6",
+
+            "Temp_Occupancy",
+            "Temp_Humidity"
+        ]
+
+        self.target = "kW"
+
+    # -------------------------
+    # Train Forecast Model
+    # -------------------------
+
     def train_model(self):
-        X = self.hourly_df[[
-         "kW_lag1",
-         "kW_lag2",
-         "kW_lag3",
-         "kW_lag24",
-         "AmbientTemp",
-         "Occupancy",
-         "TR",
-         "Humidity"
-         ]]
-        y = self.hourly_df["kW"]
 
-        split_index = int(len(self.hourly_df) * 0.8)
+        X = self.df[self.features]
+        y = self.df[self.target]
 
-        X_train = X[:split_index]
-        y_train = y[:split_index]
+        split = int(len(X) * 0.8)
 
-        X_test = X[split_index:]
-        y_test = y[split_index:]
+        X_train = X.iloc[:split]
+        X_test = X.iloc[split:]
+
+        y_train = y.iloc[:split]
+        y_test = y.iloc[split:]
+
+        self.model = XGBRegressor(
+
+            n_estimators=400,
+            learning_rate=0.03,
+            max_depth=8,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            random_state=42
+        )
 
         self.model.fit(X_train, y_train)
 
-        y_pred = self.model.predict(X_test)
+        predictions = self.model.predict(X_test)
 
-        mae = mean_absolute_error(y_test, y_pred)
+        mae = mean_absolute_error(y_test, predictions)
 
         return round(mae, 2)
 
-    # -----------------------------------
-    # True Recursive Forecast (Next 24h)
-    # -----------------------------------
-    def forecast_next_24_hours(self):
-        forecast_results = []
+    # -------------------------
+    # Forecast Next 24 Hours
+    # -------------------------
 
-        last_rows = self.hourly_df.tail(24).copy()
+    def forecast_next_24_hours(self):
+
+        forecasts = []
+
+        last_row = self.df.iloc[-1].copy()
+
+        lag1 = last_row["kW"]
+        lag2 = last_row["lag_1"]
+        lag3 = last_row["lag_2"]
+
+        rolling3 = last_row["rolling_mean_3"]
+        rolling6 = last_row["rolling_mean_6"]
+
+        temp = last_row["AmbientTemp"]
+        humidity = last_row["Humidity"]
+        occupancy = last_row["Occupancy"]
+        tr = last_row["TR"]
+
+        hour = int(last_row["Hour"])
+        day = int(last_row["DayOfWeek"])
+        month = int(last_row["Month"])
 
         for i in range(24):
 
-            latest = last_rows.iloc[-1]
+            next_hour = (hour + i) % 24
 
-            X_input = [[
-                latest["kW_lag1"],
-                latest["kW_lag2"],
-                latest["kW_lag3"],
-                latest["kW_lag24"],
-                latest["AmbientTemp"],
-                latest["Occupancy"],
-                latest["TR"],
-                latest["Humidity"]
-            ]]
+            # Simulate realistic temperature pattern
+            if 11 <= next_hour <= 16:
+                temp += np.random.uniform(0.2, 0.4)
+            elif 20 <= next_hour or next_hour <= 5:
+                temp -= np.random.uniform(0.2, 0.3)
 
-            next_kW = self.model.predict(X_input)[0]
-            forecast_results.append(next_kW)
+            # Simulate occupancy pattern
+            if 9 <= next_hour <= 18:
+                occupancy *= np.random.uniform(1.01, 1.03)
+            else:
+                occupancy *= np.random.uniform(0.96, 0.99)
 
-            # Create new row for next step
-            new_row = latest.copy()
+            temp_occ = temp * occupancy
+            temp_hum = temp * humidity
 
-            new_row["kW_lag3"] = latest["kW_lag2"]
-            new_row["kW_lag2"] = latest["kW_lag1"]
-            new_row["kW_lag1"] = next_kW
-            new_row["kW_lag24"] = last_rows.iloc[i]["kW"]
+            input_df = pd.DataFrame([{
 
-            last_rows = pd.concat([last_rows, new_row.to_frame().T])
+                "Hour": next_hour,
+                "DayOfWeek": day,
+                "Month": month,
 
-        return forecast_results
+                "AmbientTemp": temp,
+                "Humidity": humidity,
+                "Occupancy": occupancy,
+                "TR": tr,
+
+                "lag_1": lag1,
+                "lag_2": lag2,
+                "lag_3": lag3,
+
+                "rolling_mean_3": rolling3,
+                "rolling_mean_6": rolling6,
+
+                "Temp_Occupancy": temp_occ,
+                "Temp_Humidity": temp_hum
+            }])
+
+            prediction = self.model.predict(input_df)[0]
+
+            prediction = float(prediction)
+
+            forecasts.append(round(prediction, 2))
+
+            # Update lag values for next prediction
+            lag3 = lag2
+            lag2 = lag1
+            lag1 = prediction
+
+            rolling3 = (lag1 + lag2 + lag3) / 3
+            rolling6 = (rolling6 * 5 + prediction) / 6
+
+        return forecasts
