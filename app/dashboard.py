@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import numpy as np
 import time
 
@@ -11,6 +12,8 @@ from agents.anomaly_detector import AnomalyAgent
 from agents.weather import WeatherAgent
 from agents.impact import ImpactAgent
 from agents.optimizer import OptimizerAgent
+from agents.digital_twin import DigitalTwinAgent
+from agents.failure_predictor import FailurePredictorAgent
 
 st.set_page_config(page_title="HVAC AI Platform", layout="wide")
 
@@ -27,6 +30,18 @@ def load_data():
     return df
 
 df = load_data()
+
+# --------------------------------------------------
+# FAILURE PREDICTION MODEL
+# --------------------------------------------------
+
+@st.cache_resource
+def run_failure_model(data):
+    model = FailurePredictorAgent(data)
+    model.train()
+    return model
+
+failure_model = run_failure_model(df)
 
 # --------------------------------------------------
 # ANALYZER
@@ -102,6 +117,7 @@ decision = optimizer.optimize()
 
 st.sidebar.title("HVAC AI Platform")
 
+digital_twin = DigitalTwinAgent(df)
 page = st.sidebar.radio(
     "Navigation",
     [
@@ -111,6 +127,7 @@ page = st.sidebar.radio(
         "Weather",
         "Energy Impact",
         "AI Optimization",
+        "Digital Twin",
         "Recommendations",
         "Architecture"
     ]
@@ -141,6 +158,41 @@ if page == "Overview":
         st.success(explanation)
     else:
         st.error(explanation)
+
+    # Failure Risk Prediction
+    st.subheader("Failure Risk Prediction")
+    
+    failure_prob = failure_model.predict_failure(latest)
+    risk_percent = round(failure_prob * 100, 2)
+    
+    if risk_percent < 30:
+        st.success(f"Low Failure Risk ({risk_percent}%)")
+    elif risk_percent < 60:
+        st.warning(f"Moderate Failure Risk ({risk_percent}%)")
+    else:
+        st.error(f"High Failure Risk ({risk_percent}%) - Maintenance Needed")
+    
+    # Feature Importance Chart
+    features = [
+        "AmbientTemp", "Humidity", "Occupancy", "iKW_TR",
+        "PLR", "COP", "EquipmentAgeFactor", "MaintenanceScore"
+    ]
+    
+    importance = failure_model.model.feature_importances_
+    
+    imp_df = pd.DataFrame({
+        "Feature": features,
+        "Importance": importance
+    })
+    
+    fig = px.bar(
+        imp_df,
+        x="Feature",
+        y="Importance",
+        title="Factors Affecting HVAC Failure"
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
 
 # --------------------------------------------------
 # REAL TIME MONITORING
@@ -173,12 +225,9 @@ elif page == "Real-Time Monitoring":
             col2.metric("Current Efficiency (iKW/TR)", round(current_eff,3))
             col3.metric("Ambient Temperature (°C)", round(current_temp,2))
 
-
             # ----------------------
             # HVAC Efficiency Gauge
             # ----------------------
-            import plotly.graph_objects as go
-
             gauge = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=current_eff,
@@ -195,7 +244,6 @@ elif page == "Real-Time Monitoring":
 
             st.plotly_chart(gauge, use_container_width=True)
 
-
             # ----------------------
             # GRAPH 1
             # HVAC Load Stream
@@ -207,7 +255,6 @@ elif page == "Real-Time Monitoring":
             )
 
             st.plotly_chart(fig1, use_container_width=True)
-
 
             # ----------------------
             # GRAPH 2
@@ -222,7 +269,6 @@ elif page == "Real-Time Monitoring":
             )
 
             st.plotly_chart(fig2, use_container_width=True)
-
 
             # ----------------------
             # GRAPH 3
@@ -342,6 +388,50 @@ elif page == "AI Optimization":
         "CO2 Reduction (kg)",
         decision["CO2 Reduction (kg)"]
     )
+
+# --------------------------------------------------
+# DIGITAL TWIN
+# --------------------------------------------------
+
+elif page == "Digital Twin":
+
+    st.title("HVAC Digital Twin Simulation")
+
+    st.write("Simulate HVAC behavior before applying real-world changes.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        setpoint = st.slider(
+            "Temperature Setpoint (°C)",
+            18.0,
+            28.0,
+            23.0
+        )
+
+    with col2:
+        occupancy = st.slider(
+            "Occupancy Level",
+            0.0,
+            1.0,
+            0.5
+        )
+
+    results = digital_twin.simulate(setpoint, occupancy)
+
+    st.subheader("Simulation Results")
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric("Predicted Load (kW)", results["Predicted Load (kW)"])
+    c2.metric("Efficiency (iKW/TR)", results["Efficiency (iKW/TR)"])
+    c3.metric("Comfort Score (%)", results["Comfort Score (%)"])
+
+    c4, c5, c6 = st.columns(3)
+
+    c4.metric("Daily Energy (kWh)", results["Daily Energy (kWh)"])
+    c5.metric("Daily Cost (₹)", results["Daily Cost (₹)"])
+    c6.metric("CO2 Emission (kg)", results["CO2 Emission (kg)"])
 
 # --------------------------------------------------
 # RECOMMENDATIONS
