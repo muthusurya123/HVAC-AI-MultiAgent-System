@@ -23,8 +23,8 @@ df = pd.read_csv(
 # -------------------------
 
 analyzer = AnalyzerAgent(df)
-
 summary = analyzer.generate_summary()
+
 
 # -------------------------
 # Forecasting
@@ -35,46 +35,45 @@ forecaster = ForecasterAgent(
 )
 
 forecaster.load_and_prepare_data()
-
 mae = forecaster.train_model()
-
 forecast = forecaster.forecast_next_24_hours()
+
 
 # -------------------------
 # Recommendations
 # -------------------------
 
 recommender = RecommenderAgent(summary, forecast)
-
 recommendations = recommender.generate_recommendations()
+
 
 # -------------------------
 # Weather
 # -------------------------
 
 weather = WeatherAgent()
-
 temps, humidity = weather.get_weather_forecast()
+
 
 # -------------------------
 # Anomaly Detection
 # -------------------------
 
 anomaly_agent = AnomalyAgent(df)
-
 anomaly_agent.train()
 
 latest_row = df.iloc[-1]
 
-result = anomaly_agent.detect(latest_row)
+status, explanation = anomaly_agent.detect_anomaly(latest_row)
+
 
 # -------------------------
 # Generate PDF Report
 # -------------------------
 
 reporter = ReporterAgent(summary, forecast, recommendations)
-
 file_path = reporter.generate_pdf_report()
+
 
 # =============================
 # CLEAN DEMO OUTPUT
@@ -85,6 +84,10 @@ print("="*60)
 print("        AI HVAC OPTIMIZATION PLATFORM")
 print("="*60)
 
+# -------------------------
+# System Analysis
+# -------------------------
+
 print("\n📊 SYSTEM ANALYSIS")
 print("-"*40)
 
@@ -93,11 +96,21 @@ print(f"Efficiency Gap: {summary['Efficiency Gap (%)']} %")
 print(f"Peak Demand: {summary['Peak Demand (kW)']} kW")
 print(f"Load Factor: {summary['Load Factor (%)']} %")
 
+
+# -------------------------
+# System Health
+# -------------------------
+
 print("\n⚠ SYSTEM HEALTH")
 
 print(f"Degradation Status: {summary['Degradation Status']}")
 print(f"Fault Severity: {summary['Fault Severity']}")
 print(f"Maintenance Priority: {summary['Maintenance Priority']}")
+
+
+# -------------------------
+# Load Forecast
+# -------------------------
 
 print("\n📈 LOAD FORECAST (NEXT 24 HOURS)")
 print("-"*40)
@@ -105,22 +118,32 @@ print("-"*40)
 for i, value in enumerate(forecast):
     print(f"Hour {i+1}: {round(value,2)} kW")
 
+
+# -------------------------
+# Weather Forecast
+# -------------------------
+
 print("\n🌤 WEATHER FORECAST")
 print("-"*40)
 
 print("Temperature Trend:", temps)
 print("Humidity Trend:", humidity)
 
+
+# -------------------------
+# Anomaly Detection
+# -------------------------
+
 print("\n🚨 ANOMALY DETECTION")
 print("-"*40)
 
-print("System Status:", result["status"])
+print("System Status:", status)
+print("Explanation:", explanation)
 
-if isinstance(result["reason"], list):
-    for r in result["reason"]:
-        print("•", r)
-else:
-    print(result["reason"])
+
+# -------------------------
+# AI Recommendations
+# -------------------------
 
 print("\n🤖 AI RECOMMENDATIONS")
 print("-"*40)
@@ -128,21 +151,34 @@ print("-"*40)
 for r in recommendations:
     print("•", r)
 
+
+# -------------------------
+# Report Generated
+# -------------------------
+
 print("\n📄 REPORT GENERATED")
-print("----------------------------------------")
+print("-"*40)
+
 print(f"Saved at: {file_path}")
 
 
+# -------------------------
+# Energy Impact
+# -------------------------
+
 print("\n💰 ENERGY IMPACT ANALYSIS")
-print("----------------------------------------")
+print("-"*40)
 
 impact_agent = ImpactAgent(summary, forecast)
-
 impact = impact_agent.calculate_energy_impact()
 
 for key, value in impact.items():
     print(f"{key}: {value}")
 
+
+# -------------------------
+# Completed
+# -------------------------
 
 print("\n")
 print("="*60)
